@@ -6,62 +6,65 @@
 //
 
 import XCTest
+import Combine
 @testable import Kipas_kipas_Movie_UIKit
 
-final class MovieViewModelTests: XCTestCase {
-
+class MovieViewModelTests: XCTestCase {
+    
+    var cancellables: Set<AnyCancellable>!
     var viewModel: MovieViewModel!
-    var movieService: MockMovieService!
+    var mockService: MockMovieService!
     
     override func setUp() {
         super.setUp()
-        movieService = MockMovieService()
-        viewModel = MovieViewModel(movieService: movieService)
+        cancellables = Set<AnyCancellable>()
+        mockService = MockMovieService()
+        viewModel = MovieViewModel(movieService: mockService)
     }
     
     override func tearDown() {
+        cancellables = nil
         viewModel = nil
-        movieService = nil
+        mockService = nil
         super.tearDown()
     }
     
-    func testSearchMoviesSuccess() {
-        let expectation = self.expectation(description: "Movies fetched successfully")
+    func testFetchMovies() {
+        let expectation = self.expectation(description: "Movies fetched")
         
-        viewModel.searchMovies(query: "Batman") {
-            XCTAssertEqual(self.viewModel.movies.count, 2, "Movies count should be 2")
-            expectation.fulfill()
-        }
+        viewModel.getNowPlaying()
+        
+        viewModel.$movies
+            .dropFirst()
+            .sink { movies in
+                XCTAssertFalse(movies.isEmpty, "Movies should not be empty")
+                expectation.fulfill()
+            }
+            .store(in: &cancellables)
         
         waitForExpectations(timeout: 5, handler: nil)
     }
     
-    func testSearchMoviesFailure() {
-        let expectation = self.expectation(description: "Movies fetch failed")
-        
-        movieService.shouldReturnError = true
-        
-        viewModel.searchMovies(query: "Batman") {
-            XCTAssertEqual(self.viewModel.movies.count, 0, "Movies count should be 0")
-            expectation.fulfill()
+    class MockMovieService: MovieServiceProtocol {
+        func searchMovies(query: String) -> AnyPublisher<[Movie], any Error> {
+            let movies = [Movie(id: 1, title: "Mock Movie", overview: "Overview", posterPath: "nil", releaseDate: "nil", genreIds: [])]
+            return Just(movies)
+                .setFailureType(to: Error.self)
+                .eraseToAnyPublisher()
         }
         
-        waitForExpectations(timeout: 5, handler: nil)
-    }
-}
-
-class MockMovieService: MovieServiceProtocol {
-    var shouldReturnError = false
-    
-    func searchMovies(query: String, completion: @escaping ([Movie]?) -> Void) {
-        if shouldReturnError {
-            completion(nil)
-        } else {
-            let movies = [
-                Movie(id: 1, title: "Movie 1", overview: "Overview 1", posterPath: "/path1.jpg", releaseDate: "2022-01-01", genreIds: [28, 12]),
-                Movie(id: 2, title: "Movie 2", overview: "Overview 2", posterPath: "/path2.jpg", releaseDate: "2023-01-01", genreIds: [35, 18])
-            ]
-            completion(movies)
+        func getNowPlaying() -> AnyPublisher<[Movie], Error> {
+            let movies = [Movie(id: 1, title: "Mock Movie", overview: "Overview", posterPath: "nil", releaseDate: "nil", genreIds: [])]
+            return Just(movies)
+                .setFailureType(to: Error.self)
+                .eraseToAnyPublisher()
+        }
+        
+        func getMovieCredits(movieId: Int) -> AnyPublisher<[Cast], Error> {
+            let movie = [Cast(id: 1, name: "Mock Movie", profilePath: "Overview")]
+            return Just(movie)
+                .setFailureType(to: Error.self)
+                .eraseToAnyPublisher()
         }
     }
 }
