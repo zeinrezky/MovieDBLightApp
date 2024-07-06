@@ -6,10 +6,12 @@
 //
 
 import UIKit
+import Combine
 
 class MainViewController: UIViewController {
 
     private let viewModel = MovieViewModel(movieService: MovieService())
+    private var cancellables = Set<AnyCancellable>()
         
     private let searchBar: UISearchBar = {
         let searchBar = UISearchBar()
@@ -28,15 +30,21 @@ class MainViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
+        setupBinding()
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        viewModel.getNowPlaying { [weak self] in
-            DispatchQueue.main.async {
-                self?.tableView.reloadData()
-            }
-        }
+        viewModel.getNowPlaying()
+    }
+    
+    private func setupBinding() {
+        viewModel.$movies
+                    .receive(on: DispatchQueue.main)
+                    .sink { [weak self] _ in
+                        self?.tableView.reloadData()
+                    }
+                    .store(in: &cancellables)
     }
     
     private func setupUI() {
@@ -63,11 +71,7 @@ class MainViewController: UIViewController {
     }
     
     private func searchMovies(query: String) {
-        viewModel.searchMovies(query: query) { [weak self] in
-            DispatchQueue.main.async {
-                self?.tableView.reloadData()
-            }
-        }
+        viewModel.searchMovies(query: query)
     }
 }
 
@@ -96,15 +100,12 @@ extension MainViewController: UITableViewDelegate, UITableViewDataSource {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         
-        viewModel.getMovieCredits(movieId: viewModel.movies[indexPath.row].id) {
-            DispatchQueue.main.async {
-                let detailVC = DetailViewController()
-                detailVC.cast = self.viewModel.casts
-                detailVC.movie = self.viewModel.movies[indexPath.row]
-                self.navigationController?.pushViewController(detailVC, animated: true)
-            }
+        DispatchQueue.main.async {
+            let detailVC = DetailViewController()
+            detailVC.cast = self.viewModel.casts
+            detailVC.movie = self.viewModel.movies[indexPath.row]
+            self.navigationController?.pushViewController(detailVC, animated: true)
         }
-    
     }
     
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {

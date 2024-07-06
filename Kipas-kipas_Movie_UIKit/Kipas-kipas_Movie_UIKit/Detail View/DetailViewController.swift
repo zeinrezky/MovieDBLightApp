@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import Combine
 
 class DetailViewController: UIViewController {
     
@@ -23,13 +24,31 @@ class DetailViewController: UIViewController {
     
     var movie: Movie?
     var cast: [Cast]?
+    
+    private let viewModel = MovieViewModel(movieService: MovieService())
+    private var cancellables = Set<AnyCancellable>()
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        viewModel.getMovieCredits(movieId: movie?.id ?? 1)
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         setupView()
         setupConstraints()
-        setupData()
+        setupBinding()
     }
+    
+    private func setupBinding() {
+        viewModel.$casts
+                    .receive(on: DispatchQueue.main)
+                    .sink { [weak self] _ in
+                        self?.setupData()
+                    }
+                    .store(in: &cancellables)
+    }
+
     
     private func setupView() {
         view.backgroundColor = .white
@@ -142,7 +161,7 @@ class DetailViewController: UIViewController {
             imageView.image = UIImage(named: "placeholder")
         }
         
-        for castMember in cast {
+        for castMember in viewModel.casts {
             let castView = createCastView(name: castMember.name, profilePath: castMember.profilePath)
             castStackView.addArrangedSubview(castView)
         }
